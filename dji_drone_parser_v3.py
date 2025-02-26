@@ -59,10 +59,11 @@ class DJIDroneLogParser():
                     0xE70E,0xF687,0xC41C,0xD595,0xA12A,0xB0A3,0x8238,0x93B1,0x6B46,0x7ACF,0x4854,0x59DD,0x2D62,0x3CEB,0x0E70,0x1FF9,
                     0xF78F,0xE606,0xD49D,0xC514,0xB1AB,0xA022,0x92B9,0x8330,0x7BC7,0x6A4E,0x58D5,0x495C,0x3DE3,0x2C6A,0x1EF1,0x0F78]
 
-    def check_sum(data):
+    def check_sum(self, data):
         v = 13970
         for i in data:
-            v = (v >> 8) ^ DJIDroneLogParser.crc_table[(i ^ v) & 0xFF]
+            # v = (v >> 8) ^ DJIDroneLogParser.crc_table[(i ^ v) & 0xFF]
+            v = (v >> 8) ^ self.crc_table[(i ^ v) & 0xFF]
         return v
 
 # class DATFile:
@@ -75,11 +76,11 @@ class DJIDroneLogParser():
         if self.data[242:252] == b"DJI_LOG_V3":
             # DAT File V3
             self.record_start_pos = 256
-            print("V3")
+            print("V3\n")
         else:
             # DAT File V1
             self.record_start_pos = 128
-            print("V1")
+            print("V1\n")
     
     def find_next55(self, start):
         try:
@@ -105,7 +106,8 @@ class DJIDroneLogParser():
                 if record_len < 10 or cur_pos + record_len > len(self.data):
                     cur_pos += 2
                     raise Exception(f"Record Length Corrupted at position:{cur_pos - 1}")
-                crc = DJIDroneLogParser.check_sum(self.data[cur_pos:cur_pos + record_len - 2])
+                # crc = DJIDroneLogParser.check_sum(self.data[cur_pos:cur_pos + record_len - 2])
+                crc = self.check_sum(self.data[cur_pos:cur_pos + record_len - 2])
                 if crc & 0xFF != self.data[cur_pos + record_len - 2] or crc >> 8 != self.data[cur_pos + record_len - 1]:
                     cur_pos += record_len
                     raise Exception(f"crc error at position:{cur_pos - 2}")
@@ -138,7 +140,7 @@ class DJIDroneLogParser():
             gps_records.append([datetime(year, month, day, hour, minute, second), longitude / (10 ** 7), latitude / (10 ** 7)])
         return gps_records
     
-    def search(files, root_path):
+    def search(self, files, root_path):
         pattern = re.compile(r'^\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}_FLY\d{3}\.DAT$')
         for file in files:
             # Skip files that do not match the regex pattern
@@ -155,8 +157,11 @@ class DJIDroneLogParser():
             print('Processing File:', dat_path)
             
             for key, value in DJIDroneLogParser.extract_dat(dat_path).items():
+                
+                DJIDroneLogParser.output_txt("value_output", value)
+                self.data = value
                 if key.endswith(".DAT"):
-                    for record in DJIDroneLogParser(value).parse_gps():
+                    for record in self.parse_gps():
                         csv_writer.writerow(record)
             
             csvfile.close()
@@ -170,11 +175,12 @@ class DJIDroneLogParser():
         fsize = os.path.getsize(file)
         # print(fsize)
         out[basename] = src_data[:fsize]
-
+        DJIDroneLogParser.output_txt("fsize_output", src_data[:fsize])
+        
         return out
     
     def output_txt(filename, var):
-        f = open(f'./output/{filename}', 'w')            
+        f = open(f'./output/{filename}.txt', 'w')            
         f.write(repr(var) + '\n')
         f.close()
 
